@@ -1,4 +1,4 @@
-**English** | [한국어](USER_GUIDE.ko.md)
+**English** | [한국어](README.ko.md)
 
 # OpenFunML
 
