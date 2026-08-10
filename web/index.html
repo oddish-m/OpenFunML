@@ -339,11 +339,13 @@ const STAGE_LABEL = {
   done: "done",
 };
 
+// OFS appends " left" unconditionally, which reads as "estimating left" for the
+// first few seconds. Same numbers, one less wart.
 function fmtTime(sec) {
   if (!(sec > 0)) return "estimating";
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  return `${m > 0 ? `${m}m ${s}s` : `${s}s`} left`;
 }
 
 let runStarted = 0;
@@ -353,7 +355,7 @@ function status(stage, frac) {
   if (stage === "infer") {
     const elapsed = (Date.now() - runStarted) / 1000;
     const eta = frac > 0.02 ? elapsed / frac - elapsed : 0;
-    $("status").textContent = `${label}  |  ${fmtTime(eta)} left`;
+    $("status").textContent = `${label}  |  ${fmtTime(eta)}`;
   } else {
     $("status").textContent = label;
   }
