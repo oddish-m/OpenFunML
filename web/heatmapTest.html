@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Funscript Heatmap</title>
+
+<style>
+body {
+    margin: 0;
+    padding: 30px;
+    background: #181818;
+    color: #ccc;
+    font-family: Arial, sans-serif;
+}
+
+#dropZone {
+    max-width: 1000px;
+    margin: 0 auto 20px;
+    padding: 30px;
+    border: 1px dashed #666;
+    text-align: center;
+    cursor: pointer;
+}
+
+#canvas {
+    display: block;
+    width: 100%;
+    max-width: 1200px;
+    height: 90px; /* 기존 180px의 절반 */
+    margin: auto;
+    background: #181818;
+}
+
+#fileInput {
+    display: none;
+}
+</style>
+</head>
+
+<body>
+
+<div id="dropZone">
+    Funscript 파일 드롭 또는 클릭
+</div>
+
+<input id="fileInput" type="file" accept=".funscript,.json">
+<canvas id="canvas"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+
+let actions = [];
+
+dropZone.onclick = () => fileInput.click();
+
+fileInput.onchange = () => {
+    if (fileInput.files[0]) loadFile(fileInput.files[0]);
+};
+
+dropZone.ondragover = e => {
+    e.preventDefault();
+};
+
+dropZone.ondrop = e => {
+    e.preventDefault();
+    if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+};
+
+async function loadFile(file) {
+    const text = await file.text();
+    const json = JSON.parse(text);
+
+    actions = json.actions || [];
+    actions.sort((a, b) => a.at - b.at);
+
+    draw();
+}
+
+function draw() {
+    if (actions.length < 2) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const duration = actions[actions.length - 1].at;
+
+    drawPositionWaveform(0, 0, width, height, duration);
+}
+
+function drawPositionWaveform(x, y, width, height, duration) {
+    const speeds = [];
+
+    for (let i = 1; i < actions.length; i++) {
+        const a = actions[i - 1];
+        const b = actions[i];
+        const dt = b.at - a.at;
+
+        if (dt <= 0) continue;
+
+        speeds.push(Math.abs(b.pos - a.pos) / (dt / 1000));
+    }
+
+    const maxSpeed = percentile(speeds, 0.95) || 1;
+
+    ctx.lineWidth = 1;
+
+    for (let i = 1; i < actions.length; i++) {
+        const a = actions[i - 1];
+        const b = actions[i];
+        const dt = b.at - a.at;
+
+        if (dt <= 0) continue;
+
+        const speed = Math.abs(b.pos - a.pos) / (dt / 1000);
+        const intensity = Math.min(speed / maxSpeed, 1);
+
+        const x1 = x + (a.at / duration) * width;
+        const x2 = x + (b.at / duration) * width;
+
+        const y1 = y + height - (a.pos / 100) * height;
+        const y2 = y + height - (b.pos / 100) * height;
+
+        ctx.strokeStyle = heatColor(intensity);
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+    }
+}
+
+function heatColor(t) {
+    const stops = [
+        [0.00, [30, 150, 255]],
+        [0.25, [0, 200, 210]],
+        [0.45, [30, 210, 80]],
+        [0.65, [240, 220, 30]],
+        [0.82, [255, 120, 20]],
+        [0.94, [255, 40, 50]],
+        [1.00, [255, 40, 180]]
+    ];
+
+    for (let i = 1; i < stops.length; i++) {
+        if (t <= stops[i][0]) {
+            const [t0, c0] = stops[i - 1];
+            const [t1, c1] = stops[i];
+            const f = (t - t0) / (t1 - t0);
+
+            const r = lerp(c0[0], c1[0], f);
+            const g = lerp(c0[1], c1[1], f);
+            const b = lerp(c0[2], c1[2], f);
+
+            return `rgb(${r},${g},${b})`;
+        }
+    }
+
+    return "rgb(255,40,180)";
+}
+
+function lerp(a, b, t) {
+    return Math.round(a + (b - a) * t);
+}
+
+function percentile(values, p) {
+    const filtered = values
+        .filter(v => Number.isFinite(v))
+        .sort((a, b) => a - b);
+
+    if (!filtered.length) return 0;
+
+    const index = Math.floor((filtered.length - 1) * p);
+    return filtered[index];
+}
+
+window.addEventListener("resize", draw);
+</script>
+
+</body>
+</html>
